@@ -1,8 +1,4 @@
-/* Nerf gun speed meter using atmega8 and photodiodes
- * Pinout:
- * PB0 - Input Capture (OR'd led sensors, active high)
- * PD0-PD6 - 7-segment display cathodes pin a-f (active low)
- * PB1-PB3 - 7-segment display anode driver (BC560 or similar)
+/* 8x8x8 LED Cube software
  */
 
 #include <avr/io.h>
@@ -17,9 +13,9 @@
 /* TIMER2 FREQUENCY CALCULATION
  * target: 30 fps => 30*8=240 Hz layer clock
  * main clock: 16MHz
- * max prescaler: 1024 -> 19.53125 kHz
- * compare value: 20MHz/1024/(30Hz*8) = 81.38 */
-#define PLEXDELAY 81
+ * compare value: 16MHz/1024/(30Hz*8) = 65.10 */
+//#define PLEXDELAY 65
+#define PLEXDELAY 25
 
 unsigned char currentLayer = 0; //currently multiplexed segment (equals decade)
 unsigned char currentRow = 0; //currently transmitted row (if 7 after transfer, row is complete)
@@ -36,35 +32,46 @@ unsigned short frameCounter = 0;
 #define RCK_ON (PORTB |= (1 << 2))
 #define RCK_OFF (PORTB &= ~(1 << 2))
 
+#define BUTTON_L (!(PIND & (1<<PD3)))
+#define BUTTON_R (!(PIND & (1<<PD2)))
+
 //timer2 compare match
 ISR(TIMER2_COMP_vect) {
+  if (frameCounter == 255) {
+    frameCounter=0;
+  } else {
+    frameCounter++;
+    return;
+  }
   if (currentRow != 7) //spi was too slow!
     ; //TODO error signaling
-  currentRow = 0;
-  frameCounter++;
-  if (currentLayer == 7)
+  if (currentLayer == 7) {
+    frameCounter++;
     currentLayer = 0;
-  else
+  } else
     currentLayer++;
-  SPDR = currentImage[8*currentLayer+currentRow];
+  currentRow = 1; // row 0 is transferred below
+  SPDR = currentImage[8*0+0];
+  //SPDR = currentImage[8*currentLayer+0];
 }
 
 //serial transfer complete
 ISR(SPI_STC_vect) {
-  if (currentRow == 7) { //layer complete, shift layer driver)
+  if (currentRow == 8) { //layer complete, shift layer driver)
     RCK_ON;
-    PORTC = currentRow | (PORTC & ~7); //attention: also disables LCD RS,RW,E pins, but should not matter
+    PORTC = currentLayer | (PORTC & ~7);
     RCK_OFF;
   } else { //layer not complete yet, shift next row
-    SPDR = currentImage[8*currentLayer+currentRow];
+    //SPDR = currentImage[8*currentLayer+currentRow];
+    SPDR = currentImage[8*0+currentRow];
     currentRow++;
   }
 }
 
 int main() {
-  DDRB = 0b00010000; //5=SCK (shift register data clock), 4=MISO (unused), 3=MOSI (shift register data), 2=RCK (shift register latch clock, was SS), 1=CS (unused), 0=lcd backlight
-  DDRC = 0b01000000; //6=reset (disabled, otherwise input), 5=RS, 4=RW, 3=E, 2-0=layer mux
-  DDRD = 0b00001101; //7-4=lcd data, 3-2=buttons, 1=txd, 0=rxd
+  DDRB = 0b00101101; //5=SCK (shift register data clock), 4=MISO (unused), 3=MOSI (shift register data), 2=RCK (shift register latch clock, was SS), 1=CS (unused), 0=lcd backlight
+  DDRC = 0b00111111; //6=reset (disabled, otherwise input), 5=RS, 4=RW, 3=E, 2-0=layer mux
+  DDRD = 0b11110010; //7-4=lcd data, 3-2=buttons, 1=txd, 0=rxd
 
   PORTB = 0b00010010; //enable pullups on unused inputs, disable clock and data lines, pull CS high (unused, but has 10k pullup), disable backlight
   PORTC = 0; //disable all mux pins (select layer 0), disable lcd outputs
@@ -73,7 +80,7 @@ int main() {
   //Timer2 for layer multiplexing
   OCR2 = PLEXDELAY; //set compare match value
   TCCR2 = 0b00001111; //CTC mode, prescaler 1024
-  //TIMSK = 0b10000000; //enable output compare match interrupt
+  TIMSK = 0b10000000; //enable output compare match interrupt
 
   //SPI for shift register operation
   SPCR = 0b11110000; //interrupt enable, spi enable, LSB first, master mode, CPOL=0, CPHA=0, SPR1:0=00 (->clk/4)
@@ -92,17 +99,39 @@ int main() {
   for( i = 0; i < strlen(helloStr); i++ ) {
     writeRAM(helloStr[i]);
   }
-  BACKLIGHT_ON;
+  BACKLIGHT_OFF;
 
   sei();
 
-  memset(currentImage, 0xff, sizeof(currentImage));
+  memset(currentImage, 0xff, 64);
 
-  //unsigned char x=0, y=0, z=0;
+  unsigned char x=0, y=0, z=0;
+  //currentLayer=0;
   while(1) {
-  /*  sleep_mode();
-    if (frameCounter == 30) {
-  BACKLIGHT_ON;
+    _delay_ms(100);
+    //currentRow=0;
+    currentImage[8*z+y] = 0;//xff;
+
+    if (BUTTON_L) {
+      if (i==0) {
+        x==7?x=0:x++;
+        i=1;
+      }
+    } else {
+      if (BUTTON_R) {
+        if (i==0) {
+          y==7?y=0:y++;
+          i=1;
+        }
+      } else
+        i=0;
+    }
+    currentImage[8*z+y] = (1<<x);
+
+    //SPDR = currentImage[8*currentLayer+currentRow]; //starts input, rest is done via ISR
+
+    /*sleep_mode();
+    if (frameCounter >= 30) {
       LED_OFF(x,y,z);
       if (z == 7 && y == 7 && x == 7)
         x = y = z = 0;
@@ -120,18 +149,7 @@ int main() {
       }
       LED_ON(x,y,z);
       frameCounter = 0;
-  BACKLIGHT_OFF;
     }*/
-    _delay_ms(1000);
-    if (currentLayer == 7) { //layer complete, shift layer driver)
-      //RCK_ON;
-      //RCK_OFF;
-      currentLayer = 0;
-    } else { //layer not complete yet, shift next row
-      //SPDR = currentImage[8*currentLayer+currentRow];
-      currentLayer++;
-    }
-    PORTC = currentLayer; // | (PORTC & ~7); //attention: also disables LCD RS,RW,E pins, but should not matter
   }
 
   return 0;
