@@ -1,14 +1,20 @@
 SRC = ledcube.c
 INC_SRC = hd44780.c
 
-F_CPU = 16000000
 MCU = atmega8
 CFLAGS = -s -Os -Wall -Werror -std=gnu99 -DF_CPU=$(F_CPU) -mmcu=$(MCU)
 AVRDUDE_MCU = m8
 AVRDUDE_PROG = usbasp
 
 HFUSE = 0xc9
-LFUSE = 0xff
+
+# 8 MHz internal osc
+# F_CPU = 8000000
+# LFUSE = 0xe4
+
+# crystal
+F_CPU = 16000000
+LFUSE = 0xde
 
 BIN = $(SRC:%.c=%)
 HEX = $(BIN).hex

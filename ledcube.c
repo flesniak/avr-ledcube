@@ -14,8 +14,14 @@
  * target: 30 fps => 30*8=240 Hz layer clock
  * main clock: 16MHz
  * compare value: 16MHz/1024/(30Hz*8) = 65.10 */
-//#define PLEXDELAY 65
-#define PLEXDELAY 25
+// #define PLEXDELAY 65
+#define PLEXDELAY 30
+
+/* TIMER2 FREQUENCY CALCULATION
+* target: 30 fps => 30*8=240 Hz layer clock
+* main clock: 8MHz
+* compare value: 8MHz/1024/(30Hz*8) = 33 */
+// #define PLEXDELAY 33
 
 unsigned char currentLayer = 0; //currently multiplexed segment (equals decade)
 unsigned char currentRow = 0; //currently transmitted row (if 7 after transfer, row is complete)
@@ -37,12 +43,12 @@ unsigned short frameCounter = 0;
 
 //timer2 compare match
 ISR(TIMER2_COMP_vect) {
-  if (frameCounter == 255) {
-    frameCounter=0;
-  } else {
-    frameCounter++;
-    return;
-  }
+  // if (frameCounter == 255) {
+  //   frameCounter=0;
+  // } else {
+  //   frameCounter++;
+  //   return;
+  // }
   if (currentRow != 7) //spi was too slow!
     ; //TODO error signaling
   if (currentLayer == 7) {
@@ -50,9 +56,9 @@ ISR(TIMER2_COMP_vect) {
     currentLayer = 0;
   } else
     currentLayer++;
-  currentRow = 1; // row 0 is transferred below
-  SPDR = currentImage[8*0+0];
-  //SPDR = currentImage[8*currentLayer+0];
+  currentRow = 1; // row 0 is transferred right now
+  // SPDR = currentImage[8*0+0]; // hack for using first layer data only
+  SPDR = currentImage[8*currentLayer+0];
 }
 
 //serial transfer complete
@@ -62,10 +68,74 @@ ISR(SPI_STC_vect) {
     PORTC = currentLayer | (PORTC & ~7);
     RCK_OFF;
   } else { //layer not complete yet, shift next row
-    //SPDR = currentImage[8*currentLayer+currentRow];
-    SPDR = currentImage[8*0+currentRow];
+    SPDR = currentImage[8*currentLayer+currentRow];
+    // SPDR = currentImage[8*0+currentRow]; // hack for using first layer data only
     currentRow++;
   }
+}
+
+unsigned char rand8() {
+  static unsigned char value = 0xad;
+  unsigned char tmp;
+
+  tmp = value >> 1;
+  if (value & 1)
+    tmp ^= 0xB8; // x^8 + x^6 + x^5 + x^4 + 1
+
+  value = tmp;
+  return value;
+}
+
+void single_movable_led(bool invert) {
+  static unsigned char x=0, y=0, debounce=0;
+
+  for (unsigned char z=0; z<8; z++)
+    currentImage[8*z+y] = invert?0:0xff;
+
+  if (BUTTON_L) {
+    if (debounce==0) {
+      x==7?x=0:x++;
+      debounce=1;
+    }
+  } else {
+    if (BUTTON_R) {
+      if (debounce==0) {
+        y==7?y=0:y++;
+        debounce=1;
+      }
+    } else
+      debounce=0;
+  }
+
+  for (unsigned char z=0; z<8; z++)
+    currentImage[8*z+y] = invert?(1<<x):~(1<<x);
+}
+
+void single_random_led() {
+  static unsigned char x=0, y=0, z=0;
+  // unsigned char rnd = rand8();
+
+  currentImage[8*z+y] = 0xff;
+  // x = rnd & 7;
+  // y = (rnd>>3) & 7;
+  // z = ((rnd>>6) ^ rnd) & 7;
+  x = rand8() & 7;
+  y = rand8() & 7;
+  z = rand8() & 7;
+  currentImage[8*z+y] = ~(1<<x);
+}
+
+void rain() {
+  static unsigned char z=0;
+
+  // move layers down by one
+  for (z=7; z>0; z--)
+    memcpy(&currentImage[8*z], &currentImage[8*(z-1)], 8);
+
+  // create raindrops on top layer
+  memset(currentImage, 0xff, 8);
+  for (int i=0; i<5; i++)
+    currentImage[rand8()&7] &= ~(1<<(rand8()&7));
 }
 
 int main() {
@@ -105,28 +175,16 @@ int main() {
 
   memset(currentImage, 0xff, 64);
 
-  unsigned char x=0, y=0, z=0;
+  // unsigned char x=0, y=0, z=0;
   //currentLayer=0;
   while(1) {
-    _delay_ms(100);
-    //currentRow=0;
-    currentImage[8*z+y] = 0;//xff;
-
-    if (BUTTON_L) {
-      if (i==0) {
-        x==7?x=0:x++;
-        i=1;
-      }
-    } else {
-      if (BUTTON_R) {
-        if (i==0) {
-          y==7?y=0:y++;
-          i=1;
-        }
-      } else
-        i=0;
-    }
-    currentImage[8*z+y] = (1<<x);
+    _delay_ms(80);
+    PORTB ^= (1 << 0);
+    // sleep_mode();
+    // single_movable_led(false);
+    // single_movable_led(true);
+    // single_random_led();
+    rain();
 
     //SPDR = currentImage[8*currentLayer+currentRow]; //starts input, rest is done via ISR
 
