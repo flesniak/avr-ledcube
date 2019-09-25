@@ -87,6 +87,35 @@ unsigned char rand8() {
 }
 
 void single_movable_led(bool invert) {
+  static unsigned char x=0, y=0, z=0, debounce=0;
+
+  // for (unsigned char z=0; z<8; z++)
+  //   currentImage[8*z+y] = invert?0:0xff;
+  currentImage[8*z+y] = invert?0:0xff;
+
+  if (BUTTON_L) {
+    if (debounce==0) {
+      x==7?x=0:x++;
+      debounce=1;
+    }
+  } else {
+    if (BUTTON_R) {
+      if (debounce==0) {
+        y==7?y=0:y++;
+        debounce=1;
+      }
+    } else
+      debounce=0;
+  }
+
+  z = z<7 ? z+1 : 0;
+
+  // for (unsigned char z=0; z<8; z++)
+  //   currentImage[8*z+y] = invert?(1<<x):~(1<<x);
+  currentImage[8*z+y] = invert?(1<<x):~(1<<x);
+}
+
+void single_movable_column(bool invert) {
   static unsigned char x=0, y=0, debounce=0;
 
   for (unsigned char z=0; z<8; z++)
@@ -127,6 +156,7 @@ void single_random_led() {
 
 void rain() {
   static unsigned char z=0;
+  unsigned char tmp;
 
   // move layers down by one
   for (z=7; z>0; z--)
@@ -134,8 +164,10 @@ void rain() {
 
   // create raindrops on top layer
   memset(currentImage, 0xff, 8);
-  for (int i=0; i<5; i++)
-    currentImage[rand8()&7] &= ~(1<<(rand8()&7));
+  for (int i=0; i<5; i++) {
+    tmp = rand8();
+    currentImage[tmp&7] &= ~(1<<(tmp>>4&7));
+  }
 }
 
 int main() {
