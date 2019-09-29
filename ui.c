@@ -23,6 +23,15 @@ void ui_writeString(const char* str, u8 pos, u8 len) {
   }
 }
 
+void ui_writeRowPadded(const char* str, u8 row) {
+  setDDRAMAddress(row ? 0x40 : 0);
+  u8 len = strlen(str);
+  for (u8 i=0; i<len; i++)
+    writeRAM(str[i]);
+  for (u8 i=len; i<16; i++)
+    writeRAM(' ');
+}
+
 void ui_init() {
   BACKLIGHT_OFF;
 
@@ -32,8 +41,8 @@ void ui_init() {
   setMovement(0,1);
   setMode3(0,1,0);
 
-  const char helloStr[] = "LEDCUBE         Fabian Lesniak";
-  ui_writeString(helloStr, 0, strlen(helloStr));
+  ui_writeRowPadded("LEDCUBE", 0);
+  ui_writeRowPadded("Fabian Lesniak", 1);
 
   BACKLIGHT_ON;
 }
@@ -42,18 +51,14 @@ static bool in_menu = false;
 static u8 menu_anim_idx = 0;
 
 static void ui_render_menu() {
-  const char header[] = "Choose Animation";
-  ui_writeString(header, 0, strlen(header));
-
-  ui_writeString(cube_get_anim_name(menu_anim_idx), 16, 16);
+  ui_writeRowPadded("Choose Animation", 0);
+  ui_writeRowPadded(cube_get_anim_name(menu_anim_idx), 1);
 }
 
 static void ui_render_anim() {
-  ui_writeString(cube_get_anim_name(menu_anim_idx), 0, 16);
-
-  const char* anim_status = cube_get_anim_status();
-  // anim_status = 0 clears text
-  ui_writeString(anim_status, 0, 16);
+  ui_writeRowPadded(cube_get_anim_name(menu_anim_idx), 0);
+  // cube_get_anim_status = 0 clears text
+  ui_writeRowPadded(cube_get_anim_status(), 1);
 }
 
 static void ui_render() {

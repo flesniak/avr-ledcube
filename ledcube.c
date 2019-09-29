@@ -64,7 +64,7 @@ int main() {
 
   while(1) {
     sleep_mode();
-    // ui_pollButtons_debounced();
+    ui_pollButtons_debounced();
     cube_run();
   }
 

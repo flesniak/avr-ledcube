@@ -4,8 +4,8 @@
 #define LED_OFF(x,y,z) (currentImage[8*z+y] |= (1<<x))
 #define LED_ON(x,y,z) (currentImage[8*z+y] &= ~(1<<x))
 
-#define BACKLIGHT_ON (PORTB |= (1 << 0))
-#define BACKLIGHT_OFF (PORTB &= ~(1 << 0))
+#define BACKLIGHT_OFF (PORTB |= (1 << 0))
+#define BACKLIGHT_ON (PORTB &= ~(1 << 0))
 
 #define RCK_ON (PORTB |= (1 << 2))
 #define RCK_OFF (PORTB &= ~(1 << 2))
