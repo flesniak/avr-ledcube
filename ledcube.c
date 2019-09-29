@@ -62,16 +62,9 @@ int main() {
 
   sei();
 
-  unsigned char debounce = 0;
   while(1) {
     sleep_mode();
-
-    if (debounce == 60) {
-      ui_pollButtons();
-      debounce = 0;
-    } else
-      debounce++;
-
+    // ui_pollButtons_debounced();
     cube_run();
   }
 

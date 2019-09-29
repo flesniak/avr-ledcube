@@ -15,4 +15,7 @@
 
 #define WAIT_UART_READY while(!(UCSRA & (1 << UDRE)))
 
+typedef unsigned char u8;
+typedef unsigned short u16;
+
 #endif //MACROS_H
